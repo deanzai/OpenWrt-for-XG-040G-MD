@@ -10,7 +10,7 @@ on:
       log_switch:
         description: "Build logs"
         required: false
-        default: false
+        default: true
         type: boolean
 
 env:
@@ -54,8 +54,6 @@ jobs:
 
           if [[ -n "$TZ" ]]; then
             sudo timedatectl set-timezone "$TZ"
-          else
-            echo "TZ is not set, skipping timezone setup."
           fi
 
       - name: Ensure Python build tools
@@ -68,7 +66,6 @@ jobs:
           git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" openwrt
 
           cd patch
-
           [ -e airoha/01_leds ] && cp -f airoha/01_leds ../openwrt/target/linux/airoha/an7581/base-files/etc/board.d/01_leds
           [ -e airoha/02_network ] && cp -f airoha/02_network ../openwrt/target/linux/airoha/an7581/base-files/etc/board.d/02_network
           [ -e airoha/an7581.mk ] && cp -f airoha/an7581.mk ../openwrt/target/linux/airoha/image/an7581.mk
@@ -124,17 +121,19 @@ jobs:
           set -o pipefail
           make target/linux/prepare -j1 V=sc 2>&1 | tee target-linux-prepare.log
 
-      - name: Upload precheck log on failure
+      - name: Extract first error from prepare log
         if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: target-linux-prepare-log
-          path: openwrt/target-linux-prepare.log
+        working-directory: ./openwrt
+        run: |
+          echo "===== FIRST PREPARE ERROR ====="
+          grep -i -n -m 1 -E "error:|failed|hunk .* failed|rej|no rule to make target" target-linux-prepare.log || true
+          echo "===== LAST 80 LINES ====="
+          tail -n 80 target-linux-prepare.log || true
 
       - name: Compile OpenWrt firmware
         id: compile
+        working-directory: ./openwrt
         run: |
-          cd openwrt
           set -o pipefail
 
           if [[ "${{ inputs.log_switch }}" == "true" ]]; then
@@ -151,14 +150,23 @@ jobs:
           echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> "$GITHUB_ENV"
           echo "status=success" >> "$GITHUB_OUTPUT"
 
-      - name: Upload build log
+      - name: Extract first error from build log
+        if: failure()
+        working-directory: ./openwrt
+        run: |
+          echo "===== FIRST BUILD ERROR ====="
+          grep -i -n -m 1 -E "error:|failed|hunk .* failed|rej|no rule to make target" build.log || true
+          echo "===== LAST 120 LINES ====="
+          tail -n 120 build.log || true
+
+      - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: openwrt-build-log
+          name: openwrt-logs
           path: |
-            openwrt/build.log
             openwrt/target-linux-prepare.log
+            openwrt/build.log
 
       - name: Prepare firmware artifacts path
         id: organize
