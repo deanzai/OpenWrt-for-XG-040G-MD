@@ -1,6 +1,6 @@
 --- a/drivers/mtd/nand/spi/fmsh.c
 +++ b/drivers/mtd/nand/spi/fmsh.c
-@@ -102,6 +102,35 @@ static int fm25s01bi3_ooblayout_free(str
+@@ -102,6 +102,35 @@ static int fm25s01bi3_ooblayout_free(struct mtd_info *mtd, int section,
  	return 0;
  }
  
